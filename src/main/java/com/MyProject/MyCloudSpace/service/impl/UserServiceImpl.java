@@ -36,7 +36,7 @@ public class UserServiceImpl implements UserService {
                 .username(newUser.getUsername())
                 .role(newUser.getRole())
                 .storageUsed(newUser.getStorageUsed())
-                .maxStorage(newUser.getMaxStorage())
+                .maxStorage(newUser.getBaseStorage())
                 .build();
     }
 

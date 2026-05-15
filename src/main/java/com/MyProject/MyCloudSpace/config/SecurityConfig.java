@@ -44,7 +44,8 @@ public class SecurityConfig {
                                 "/api/user/register",
                                 "/api/user/login",
                                 "/oauth2/**",
-                                "/login/oauth2/**"
+                                "/login/oauth2/**",
+                                "/api/share/download/**"
                         ).permitAll()
                         .anyRequest().authenticated())
                 .oauth2Login(oauth2 -> oauth2

@@ -12,8 +12,8 @@ import java.util.List;
 @Data
 @Builder
 @Table(name = "users")
-@ToString(exclude = {"files", "sharedFiles"}) // Exclude collections
-@EqualsAndHashCode(exclude = {"files", "sharedFiles"})
+@ToString(exclude = {"files", "sharedFiles", "payments"})
+@EqualsAndHashCode(exclude = {"files", "sharedFiles", "payments"})
 public class UserEntity {
 
     @Id
@@ -27,7 +27,7 @@ public class UserEntity {
     private String email;
 
     @Builder.Default
-    @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL,orphanRemoval = true)
+    @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FileEntity> files = new ArrayList<>();
 
     @Column(nullable = true)
@@ -46,17 +46,16 @@ public class UserEntity {
     private List<FileEntity> sharedFiles = new ArrayList<>();
 
     @Builder.Default
-    public Long StorageUsed = 0L;
+    public Long storageUsed = 0L;
 
     @Builder.Default
-    public Long maxStorage = 10L;
+    public Long baseStorage = 10L;
 
     @Column(name = "auth_provider")
     @Enumerated(EnumType.STRING)
     private AuthProvider authProvider;
 
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "payment_id", referencedColumnName = "id")
-    private PaymentEntity paymentInfo;
-
+    @Builder.Default
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PaymentEntity> payments = new ArrayList<>();
 }

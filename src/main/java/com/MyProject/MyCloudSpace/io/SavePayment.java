@@ -8,4 +8,5 @@ public class SavePayment {
     private String razorpayOrderId;
     private Double amount;
     private String status;
+    private Long storageGb;
 }

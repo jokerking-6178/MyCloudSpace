@@ -33,23 +33,18 @@ public class Oauth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                                         Authentication authentication) throws IOException, ServletException {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        // Determine provider from request
         String registrationId = getRegistrationId(request);
         AuthProvider provider = registrationId.equalsIgnoreCase("google") ?
                 AuthProvider.GOOGLE : AuthProvider.GITHUB;
 
-        // Extract user info based on provider
         String email = extractEmail(oAuth2User, provider);
         String name = extractName(oAuth2User, provider);
 
-        // Create or update user
         UserEntity user = processOAuth2User(email, name, provider);
 
-        // Generate JWT token
         User userDetails = new User(user.getEmail(), "", Collections.emptyList());
         String jwtToken = jwtUtil.generateToken(userDetails);
 
-        // Redirect to frontend with token
         String targetUrl = UriComponentsBuilder.fromUriString(redirectUri)
                 .queryParam("token", jwtToken)
                 .queryParam("email", email)
@@ -74,8 +69,6 @@ public class Oauth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         } else if (provider == AuthProvider.GITHUB) {
             String email = oAuth2User.getAttribute("email");
             if (email == null || email.isEmpty()) {
-                // GitHub might not provide email if it's private
-                // Use login@github.com as fallback
                 String login = oAuth2User.getAttribute("login");
                 email = login + "@github.com";
             }
@@ -100,7 +93,6 @@ public class Oauth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
     private UserEntity processOAuth2User(String email, String name, AuthProvider provider) {
         return userRepository.findByEmail(email)
                 .map(existingUser -> {
-                    // Update existing user if needed
                     if (existingUser.getAuthProvider() == null) {
                         existingUser.setAuthProvider(provider);
                         return userRepository.save(existingUser);
@@ -114,11 +106,11 @@ public class Oauth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         UserEntity newUser = UserEntity.builder()
                 .email(email)
                 .username(name != null ? name : email.split("@")[0])
-                .password("") // No password for OAuth2 users
-                .role(Role.NORMAL) // Adjust based on your Role enum
+                .password("")
+                .role(Role.NORMAL)
                 .authProvider(provider)
-                .StorageUsed(0L)
-                .maxStorage(10L)
+                .storageUsed(0L)
+                .baseStorage(10L)
                 .build();
 
         return userRepository.save(newUser);

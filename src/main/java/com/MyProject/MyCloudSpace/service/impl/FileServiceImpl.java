@@ -7,6 +7,7 @@ import com.MyProject.MyCloudSpace.Entity.FileEntity;
 import com.MyProject.MyCloudSpace.repository.FileRepository;
 import com.MyProject.MyCloudSpace.repository.UserRepository;
 import com.MyProject.MyCloudSpace.service.FileService;
+import com.MyProject.MyCloudSpace.service.StorageTierService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,7 @@ public class FileServiceImpl implements FileService {
     private final S3Service s3Service;
     private final FileRepository fileRepository;
     private final UserRepository userRepository;
+    private final StorageTierService storageTierService;
     Logger log = LoggerFactory.getLogger(FileServiceImpl.class);
 
     @Transactional
@@ -35,7 +37,7 @@ public class FileServiceImpl implements FileService {
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
 
         // Step 2: Check storage quota (optional)
-        long maxStorage = (user.getMaxStorage()) * 1024 * 1024 * 1024; // 10GB limit
+        long maxStorage = storageTierService.getEffectiveMaxStorage(user) * 1024L * 1024 * 1024; // 10GB limit
         if (user.getStorageUsed() + file.getSize() > maxStorage) {
             throw new RuntimeException("Storage quota exceeded");
         }
