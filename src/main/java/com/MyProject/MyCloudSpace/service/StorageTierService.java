@@ -2,13 +2,19 @@ package com.MyProject.MyCloudSpace.service;
 
 import com.MyProject.MyCloudSpace.Entity.PaymentEntity;
 import com.MyProject.MyCloudSpace.Entity.UserEntity;
-
 import java.util.List;
 
 public interface StorageTierService {
 
-    public long getEffectiveMaxStorage(UserEntity user);
-    public List<PaymentEntity> getActiveTiers(String userId);
-    public PaymentEntity addTier(UserEntity user, String razorpayOrderId, Double amount, Long storageGb);
-    public void expireOldTiers();
+    long getEffectiveMaxStorage(UserEntity user);
+
+    List<PaymentEntity> getActiveTiers(String userId);
+
+    PaymentEntity recordPendingOrder(UserEntity user, String razorpayOrderId, long amountInPaise, long storageGb);
+
+    PaymentEntity completeOrder(String razorpayOrderId, String razorpayPaymentId);
+
+    void expireOldTiers();
+
+    long priceInPaise(long storageGb);
 }

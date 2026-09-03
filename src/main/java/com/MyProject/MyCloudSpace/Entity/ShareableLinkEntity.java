@@ -2,16 +2,8 @@ package com.MyProject.MyCloudSpace.Entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 
-/**
- * A shareable link for a file.
- *
- * - The owner sets an expiration time (e.g. 2 hours, 24 hours, 7 days).
- * - Anyone with the token can download the file until it expires.
- * - Works for both owned files and files shared with the owner.
- */
 @Entity
 @Table(name = "shareable_links")
 @Data
@@ -57,10 +49,10 @@ public class ShareableLinkEntity {
     }
 
     public boolean hasReachedDownloadLimit() {
-        return maxDownloads != null && downloadCount >= maxDownloads;
+        return maxDownloads != null && downloadCount != null && downloadCount >= maxDownloads;
     }
 
     public boolean isValid() {
-        return isActive && !isExpired() && !hasReachedDownloadLimit();
+        return Boolean.TRUE.equals(isActive) && !isExpired() && !hasReachedDownloadLimit();
     }
 }

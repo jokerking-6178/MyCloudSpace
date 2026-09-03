@@ -1,52 +1,20 @@
-import axios from 'axios';
+import apiClient from './apiClient';
 
-const API_URL = "http://localhost:8081/api/rag";
-
-// Create axios instance with interceptor for auth token
-const api = axios.create({
-    baseURL: API_URL,
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
-
-export const ingestFile = async (fileId, userId) => {
-    try {
-        const response = await api.post(`/ingest/${fileId}`, null, {
-            params: { userId }
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Ingest error:', error);
-        throw error;
-    }
+export const ingestFile = async (fileId) => {
+  const response = await apiClient.post(`/rag/ingest/${fileId}`);
+  return response.data;
+};
+export const getIngestedFileIds = async () => {
+  const response = await apiClient.get('/rag/ingested');
+  return response.data;
 };
 
-export const chatWithRag = async (userId, question, fileId = null) => {
-    try {
-        const response = await api.post('/chat', {
-            userId,
-            question,
-            fileId
-        });
-        return response.data;
-    } catch (error) {
-        console.error('Chat error:', error);
-        throw error;
-    }
+export const chatWithRag = async (question, fileId = null) => {
+  const response = await apiClient.post('/rag/chat', { question, fileId });
+  return response.data;
 };
 
-export const clearConversation = async (userId) => {
-    try {
-        await api.delete(`/conversation/${userId}`);
-    } catch (error) {
-        console.error('Clear conversation error:', error);
-        throw error;
-    }
+export const clearConversation = async () => {
+  const response = await apiClient.delete('/rag/conversation');
+  return response.data;
 };

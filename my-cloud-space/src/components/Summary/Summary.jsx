@@ -37,7 +37,6 @@ const Summary = () => {
     handleSendMessage(action);
   };
 
-  // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -75,7 +74,6 @@ const Summary = () => {
         </div>
       </div>
 
-      {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
@@ -94,7 +92,6 @@ const Summary = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* File Picker & Quick Actions */}
       <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3 mb-3">
           <FilePicker
@@ -121,7 +118,6 @@ const Summary = () => {
         </div>
       </div>
 
-      {/* Input Area */}
       <form onSubmit={handleSend} className="px-6 py-4 border-t border-gray-200">
         <div className="flex gap-3">
           <input

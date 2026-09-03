@@ -1,59 +1,60 @@
-import React, { useContext, useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { AppContext } from '../context/AppContext';
-import { fetchUserData } from '../../service/authService';
+import { useApp } from '../../hooks/useApp';
+import { fetchCurrentUser } from '../../service/authService';
+import { setStoredToken, clearStoredToken } from '../../service/apiClient';
+import FullPageSpinner from '../common/FullPageSpinner';
 
+const ERROR_MESSAGES = {
+  no_email: 'Your provider did not share an email address. Add a public email, or sign up directly.',
+  provider_mismatch: 'That email is already registered with a different sign-in method.',
+};
 
 const OAuth2RedirectHandler = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { setAuthToken, setUserData } = useContext(AppContext);
+  const { signIn } = useApp();
+
+  const handled = useRef(false);
 
   useEffect(() => {
-    const handleOAuth2Redirect = async () => {
+    if (handled.current) return;
+    handled.current = true;
+
+    const completeLogin = async () => {
+      const error = searchParams.get('error');
+      if (error) {
+        toast.error(ERROR_MESSAGES[error] || 'Sign-in failed.');
+        navigate('/login', { replace: true });
+        return;
+      }
+
       const token = searchParams.get('token');
-      const email = searchParams.get('email');
+      if (!token) {
+        toast.error('Sign-in failed: no token was returned.');
+        navigate('/login', { replace: true });
+        return;
+      }
 
-      if (token && email) {
-        try {
-          // Store token
-          localStorage.setItem('token', token);
-          localStorage.setItem('email', email);
-          setAuthToken(token);
+      setStoredToken(token);
 
-          // Fetch user data
-          const userInfo = await fetchUserData(email, token);
-          if (userInfo.status === 202) {
-            setUserData(userInfo.data);
-            toast.success('Successfully logged in with OAuth2!');
-            navigate('/dashboard');
-          } else {
-            toast.error('Failed to fetch user data');
-            navigate('/login');
-          }
-        } catch (error) {
-          console.error('OAuth2 redirect error:', error);
-          toast.error('Authentication failed');
-          navigate('/login');
-        }
-      } else {
-        toast.error('Invalid OAuth2 response');
-        navigate('/login');
+      try {
+        const user = await fetchCurrentUser();
+        signIn(token, user);
+        toast.success('Signed in successfully');
+        navigate('/dashboard', { replace: true });
+      } catch {
+        clearStoredToken();
+        toast.error('Signed in, but your profile could not be loaded. Please try again.');
+        navigate('/login', { replace: true });
       }
     };
 
-    handleOAuth2Redirect();
-  }, [searchParams, navigate, setAuthToken, setUserData]);
+    completeLogin();
+  }, [searchParams, navigate, signIn]);
 
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p className="mt-4 text-gray-600">Completing login...</p>
-      </div>
-    </div>
-  );
+  return <FullPageSpinner label="Completing sign-in..." />;
 };
 
 export default OAuth2RedirectHandler;

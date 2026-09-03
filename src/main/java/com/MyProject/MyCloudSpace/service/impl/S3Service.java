@@ -1,8 +1,7 @@
 package com.MyProject.MyCloudSpace.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -13,11 +12,11 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
-
 import java.io.IOException;
 import java.time.Duration;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class S3Service {
@@ -28,16 +27,18 @@ public class S3Service {
     @Value("${aws.bucket.name}")
     private String bucketName;
 
-    Logger log = LoggerFactory.getLogger(S3Service.class);
+    @Value("${aws.presigned-url-minutes:15}")
+    private long presignedUrlMinutes;
 
-    public String uploadFile(MultipartFile file) throws IOException {
-        String s3Key = generateUniqueKey(file.getOriginalFilename());
+    public String uploadFile(MultipartFile file, String safeFileName) throws IOException {
+        String s3Key = generateUniqueKey(safeFileName);
 
         try {
             PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                     .bucket(bucketName)
                     .key(s3Key)
                     .contentType(file.getContentType())
+                    .serverSideEncryption(ServerSideEncryption.AES256)
                     .build();
 
             s3Client.putObject(putObjectRequest,
@@ -46,7 +47,7 @@ public class S3Service {
             log.info("File uploaded to S3: {}", s3Key);
             return s3Key;
         } catch (S3Exception e) {
-            log.error("Error uploading file to S3: {}", e.getMessage());
+            log.error("Error uploading file to S3", e);
             throw new RuntimeException("Failed to upload file to S3", e);
         }
     }
@@ -58,10 +59,11 @@ public class S3Service {
                     .key(s3Key)
                     .build();
 
-            ResponseInputStream<GetObjectResponse> response = s3Client.getObject(getObjectRequest);
-            return response.readAllBytes();
+            try (ResponseInputStream<GetObjectResponse> response = s3Client.getObject(getObjectRequest)) {
+                return response.readAllBytes();
+            }
         } catch (S3Exception | IOException e) {
-            log.error("Error downloading file from S3: {}", e.getMessage());
+            log.error("Error downloading file from S3: key={}", s3Key, e);
             throw new RuntimeException("Failed to download file from S3", e);
         }
     }
@@ -76,7 +78,7 @@ public class S3Service {
             s3Client.deleteObject(deleteObjectRequest);
             log.info("File deleted from S3: {}", s3Key);
         } catch (S3Exception e) {
-            log.error("Error deleting file from S3: {}", e.getMessage());
+            log.error("Error deleting file from S3: key={}", s3Key, e);
             throw new RuntimeException("Failed to delete file from S3", e);
         }
     }
@@ -89,40 +91,20 @@ public class S3Service {
                     .build();
 
             GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofHours(1))  // URL expires in 1 hour
+                    .signatureDuration(Duration.ofMinutes(presignedUrlMinutes))
                     .getObjectRequest(getObjectRequest)
                     .build();
 
             PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
-            log.info("presigned url generated {}", presignedRequest.url().toString());
+            log.debug("Presigned URL generated for key={}", s3Key);
             return presignedRequest.url().toString();
         } catch (S3Exception e) {
-            log.error("Error generating presigned URL: {}", e.getMessage());
+            log.error("Error generating presigned URL: key={}", s3Key, e);
             throw new RuntimeException("Failed to generate presigned URL", e);
         }
     }
 
-    public boolean fileExists(String s3Key) {
-        try {
-            HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
-                    .bucket(bucketName)
-                    .key(s3Key)
-                    .build();
-
-            s3Client.headObject(headObjectRequest);
-            log.info("file exists with this key {}", s3Key);
-            return true;
-        } catch (NoSuchKeyException e) {
-            return false;
-        } catch (S3Exception e) {
-            log.error("Error checking file existence: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    private String generateUniqueKey(String originalFileName) {
-        String key = UUID.randomUUID().toString() + "_" + originalFileName;
-        log.info("generated unique key is {}" , key);
-        return key;
+    private String generateUniqueKey(String safeFileName) {
+        return UUID.randomUUID() + "_" + safeFileName;
     }
 }

@@ -1,8 +1,9 @@
 package com.MyProject.MyCloudSpace.Entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
-
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,8 +12,10 @@ import java.util.List;
 @NoArgsConstructor
 @Data
 @Builder
-@Table(name = "users")
-@ToString(exclude = {"files", "sharedFiles", "payments"})
+@Table(name = "users", indexes = {
+        @Index(name = "idx_users_email", columnList = "email")
+})
+@ToString(exclude = {"files", "sharedFiles", "payments", "password"})
 @EqualsAndHashCode(exclude = {"files", "sharedFiles", "payments"})
 public class UserEntity {
 
@@ -30,11 +33,14 @@ public class UserEntity {
     @OneToMany(mappedBy = "uploadedBy", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<FileEntity> files = new ArrayList<>();
 
+    @JsonIgnore
     @Column(nullable = true)
     private String password;
 
     @Enumerated(EnumType.STRING)
-    private Role role;
+    @Column(nullable = false)
+    @Builder.Default
+    private Role role = Role.NORMAL;
 
     @ManyToMany
     @JoinTable(
@@ -46,16 +52,28 @@ public class UserEntity {
     private List<FileEntity> sharedFiles = new ArrayList<>();
 
     @Builder.Default
-    public Long storageUsed = 0L;
+    @Column(nullable = false)
+    private Long storageUsed = 0L;
 
     @Builder.Default
-    public Long baseStorage = 10L;
+    @Column(nullable = false)
+    private Long baseStorage = 10L;
 
     @Column(name = "auth_provider")
     @Enumerated(EnumType.STRING)
     private AuthProvider authProvider;
 
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
     @Builder.Default
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PaymentEntity> payments = new ArrayList<>();
+
+    @PrePersist
+    void onCreate() {
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
 }

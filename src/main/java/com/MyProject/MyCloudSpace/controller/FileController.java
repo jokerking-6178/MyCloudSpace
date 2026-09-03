@@ -1,111 +1,104 @@
 package com.MyProject.MyCloudSpace.controller;
 
+import com.MyProject.MyCloudSpace.exception.BadRequestException;
 import com.MyProject.MyCloudSpace.io.FileMetadataDTO;
 import com.MyProject.MyCloudSpace.io.FileUploadResponse;
+import com.MyProject.MyCloudSpace.security.AppUserPrincipal;
 import com.MyProject.MyCloudSpace.service.FileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/files")
 @RequiredArgsConstructor
 public class FileController {
 
-    private final FileService fileServiceImpl;
+    private final FileService fileService;
 
     @PostMapping("/upload")
-    public ResponseEntity<FileUploadResponse> uploadFile(@RequestPart("file") MultipartFile file,
-                                                         @RequestPart("uploadedBy") String userId ,
-                                                         @RequestPart(value = "description", required = false) String description,
-                                                         @RequestPart(value = "tags", required = false) String tags) {
-        try {
-            FileUploadResponse response = fileServiceImpl.uploadFile(file, userId, description, tags);
-            return ResponseEntity.ok(response);
-        } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new FileUploadResponse(null, null, null, null, e.getMessage(), 0L, null));
-        }
+    public FileUploadResponse uploadFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                         @RequestPart("file") MultipartFile file,
+                                         @RequestPart(value = "description", required = false) String description,
+                                         @RequestPart(value = "tags", required = false) String tags)
+            throws IOException {
+        return fileService.uploadFile(file, principal.getId(), description, tags);
     }
 
-    @GetMapping("/user/{userId}")
-    public ResponseEntity<List<FileMetadataDTO>> getUserFiles(@PathVariable String userId) {
-        try{
-            List<FileMetadataDTO> files = fileServiceImpl.getUserFiles(userId);
-            return ResponseEntity.ok(files);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+    @GetMapping
+    public List<FileMetadataDTO> getMyFiles(@AuthenticationPrincipal AppUserPrincipal principal,
+                                            @RequestParam(value = "q", required = false) String query) {
+        return fileService.searchUserFiles(principal.getId(), query);
     }
 
-    @GetMapping("/shared/{userId}")
-    public ResponseEntity<List<FileMetadataDTO>> getSharedFiles(@PathVariable String userId) {
-        try {
-            List<FileMetadataDTO> files = fileServiceImpl.getSharedFiles(userId);
-            return ResponseEntity.ok(files);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+    @GetMapping("/shared")
+    public List<FileMetadataDTO> getSharedWithMe(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return fileService.getSharedFiles(principal.getId());
     }
 
     @GetMapping("/{fileId}")
-    public ResponseEntity<FileMetadataDTO> getFileMetadata(@PathVariable Long fileId) {
-        try {
-            FileMetadataDTO metadata = fileServiceImpl.getFileMetadata(fileId);
-            return ResponseEntity.ok(metadata);
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-        }
+    public FileMetadataDTO getFileMetadata(@AuthenticationPrincipal AppUserPrincipal principal,
+                                           @PathVariable Long fileId) {
+        return fileService.getFileMetadata(fileId, principal.getId());
     }
 
-    @GetMapping("/download/{fileId}")
-    public ResponseEntity<ByteArrayResource> downloadFile(@PathVariable Long fileId, @RequestParam String userId) {
-        try {
-            FileMetadataDTO metadata = fileServiceImpl.getFileMetadata(fileId);
-            byte[] data = fileServiceImpl.downloadFile(fileId, userId);
-            ByteArrayResource resource = new ByteArrayResource(data);
+    @GetMapping("/{fileId}/download")
+    public ResponseEntity<ByteArrayResource> downloadFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                                          @PathVariable Long fileId) {
+        FileService.DownloadedFile file = fileService.downloadFile(fileId, principal.getId());
 
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"" + metadata.getFileName() + "\"")
-                    .contentLength(data.length)
-                    .contentType(MediaType.parseMediaType(metadata.getContentType()))
-                    .body(resource);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(file.fileName(), StandardCharsets.UTF_8)
+                .build();
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .contentLength(file.data().length)
+                .contentType(MediaType.parseMediaType(file.contentType()))
+                .body(new ByteArrayResource(file.data()));
     }
 
-    @DeleteMapping("/remove/{fileId}/{userId}")
-    public ResponseEntity<String> deleteFile(@PathVariable Long fileId, @PathVariable String userId) {
-        try {
-            fileServiceImpl.deleteFile(fileId, userId);
-            return ResponseEntity.ok("File deleted successfully");
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        }
+    @DeleteMapping("/{fileId}")
+    public Map<String, String> deleteFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                          @PathVariable Long fileId) {
+        fileService.deleteFile(fileId, principal.getId());
+        return Map.of("message", "File deleted successfully");
     }
 
-    @PostMapping("/share/{fileId}/{ownerId}/{shareWithUserEmail}")
-    public ResponseEntity<String> shareFile(
-            @PathVariable Long fileId,
-            @PathVariable String ownerId,
-            @PathVariable String shareWithUserEmail) {
-        try {
-            fileServiceImpl.shareFile(fileId, ownerId, shareWithUserEmail);
-            return ResponseEntity.ok("File shared successfully");
-        } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+    @GetMapping("/{fileId}/shares")
+    public List<String> listShares(@AuthenticationPrincipal AppUserPrincipal principal,
+                                   @PathVariable Long fileId) {
+        return fileService.getSharedWithEmails(fileId, principal.getId());
+    }
+
+    @PostMapping("/{fileId}/shares")
+    public Map<String, String> shareFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                         @PathVariable Long fileId,
+                                         @RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("An email address is required.");
         }
+        fileService.shareFile(fileId, principal.getId(), email);
+        return Map.of("message", "File shared successfully");
+    }
+
+    @DeleteMapping("/{fileId}/shares")
+    public Map<String, String> unshareFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                           @PathVariable Long fileId,
+                                           @RequestParam("email") String email) {
+        fileService.unshareFile(fileId, principal.getId(), email);
+        return Map.of("message", "Sharing removed");
     }
 }

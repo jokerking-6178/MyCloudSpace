@@ -3,11 +3,14 @@ package com.MyProject.MyCloudSpace.controller;
 import com.MyProject.MyCloudSpace.io.RagChatRequest;
 import com.MyProject.MyCloudSpace.io.RagChatResponse;
 import com.MyProject.MyCloudSpace.io.RagIngestionResponse;
+import com.MyProject.MyCloudSpace.security.AppUserPrincipal;
 import com.MyProject.MyCloudSpace.service.RagService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/rag")
@@ -17,35 +20,25 @@ public class RagController {
     private final RagService ragService;
 
     @PostMapping("/ingest/{fileId}")
-    public ResponseEntity<RagIngestionResponse> ingestFile(
-            @PathVariable Long fileId,
-            @RequestParam String userId) {
-        try {
-            RagIngestionResponse response = ragService.ingestFile(fileId, userId);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(RagIngestionResponse.failure("Rag not properly able to ingest the file" + e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(RagIngestionResponse.failure("Ingestion failed due to some technical reasons " + e.getMessage()));
-        }
+    public RagIngestionResponse ingestFile(@AuthenticationPrincipal AppUserPrincipal principal,
+                                           @PathVariable Long fileId) {
+        return ragService.ingestFile(fileId, principal.getId());
+    }
+
+    @GetMapping("/ingested")
+    public List<Long> ingestedFiles(@AuthenticationPrincipal AppUserPrincipal principal) {
+        return ragService.getIngestedFileIds(principal.getId());
     }
 
     @PostMapping("/chat")
-    public ResponseEntity<RagChatResponse> chat(@RequestBody RagChatRequest request) {
-        try {
-            RagChatResponse response = ragService.chat(request);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(RagChatResponse.error("Question mostly not from provided docs " + e.getMessage()));
-        }
+    public RagChatResponse chat(@AuthenticationPrincipal AppUserPrincipal principal,
+                                @Valid @RequestBody RagChatRequest request) {
+        return ragService.chat(request, principal.getId());
     }
 
-    @DeleteMapping("/conversation/{userId}")
-    public ResponseEntity<String> clearConversation(@PathVariable String userId) {
-        ragService.clearConversation(userId);
-        return ResponseEntity.ok("Conversation history cleared for user: " + userId);
+    @DeleteMapping("/conversation")
+    public Map<String, String> clearConversation(@AuthenticationPrincipal AppUserPrincipal principal) {
+        ragService.clearConversation(principal.getId());
+        return Map.of("message", "Conversation history cleared");
     }
 }

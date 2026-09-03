@@ -2,15 +2,8 @@ package com.MyProject.MyCloudSpace.Entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDate;
 
-/**
- * Represents ONE storage tier purchased by a user.
- * A user can have multiple active tiers stacked on top of each other.
- * Each tier expires independently after 1 month — expiry of one does NOT
- * affect any other tier.
- */
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
@@ -18,7 +11,9 @@ import java.time.LocalDate;
 @Builder
 @ToString(exclude = {"user"})
 @EqualsAndHashCode(exclude = {"user"})
-@Table(name = "payments")
+@Table(name = "payments", indexes = {
+        @Index(name = "idx_payments_user", columnList = "user_id")
+})
 public class PaymentEntity {
 
     @Id
@@ -29,8 +24,11 @@ public class PaymentEntity {
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity user;
 
-    @Column(name = "razorpay_order_id")
+    @Column(name = "razorpay_order_id", unique = true)
     private String razorpayOrderId;
+
+    @Column(name = "razorpay_payment_id")
+    private String razorpayPaymentId;
 
     private Double amount;
 

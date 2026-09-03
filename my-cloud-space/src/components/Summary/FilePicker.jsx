@@ -1,29 +1,28 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AppContext } from '../context/AppContext';
+import React, { useState, useEffect, useCallback } from 'react';
+import { toast } from 'react-toastify';
 import { getFiles } from '../../service/fileService';
+import { toErrorMessage } from '../../service/apiClient';
 
 const FilePicker = ({ onFileSelect, selectedFile, ingestedFiles, isIngesting }) => {
   const [files, setFiles] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { userData } = useContext(AppContext);
+  const [loading, setLoading] = useState(false);
+
+  const fetchFiles = useCallback(async () => {
+    setLoading(true);
+    try {
+      setFiles(await getFiles());
+    } catch (error) {
+      toast.error(toErrorMessage(error, 'Could not load your files.'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (userData?.id && isOpen) {
-      fetchFiles();
-    }
-  }, [userData?.id, isOpen]);
-
-  const fetchFiles = async () => {
-    try {
-      const response = await getFiles(userData.id, localStorage.getItem('token'));
-      if (response.status === 200) {
-        setFiles(response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching files:', error);
-    }
-  };
+    if (isOpen) fetchFiles();
+  }, [isOpen, fetchFiles]);
 
   const getFileIcon = (fileName) => {
     const ext = fileName.split('.').pop().toLowerCase();
@@ -86,7 +85,9 @@ const FilePicker = ({ onFileSelect, selectedFile, ingestedFiles, isIngesting }) 
               />
             </div>
             <div className="overflow-y-auto">
-              {filteredFiles.length > 0 ? (
+              {loading ? (
+                <div className="p-4 text-center text-gray-500 text-sm">Loading files...</div>
+              ) : filteredFiles.length > 0 ? (
                 filteredFiles.map((file) => (
                   <button
                     key={file.id}
@@ -99,7 +100,7 @@ const FilePicker = ({ onFileSelect, selectedFile, ingestedFiles, isIngesting }) 
                     <span className="text-2xl">{getFileIcon(file.fileName)}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{file.fileName}</p>
-                      <p className="text-xs text-gray-500">{file.fileSize}</p>
+                      <p className="text-xs text-gray-500">{file.fileSizeFormatted}</p>
                     </div>
                     {ingestedFiles.has(file.id) && (
                       <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-lg font-medium">
@@ -110,7 +111,7 @@ const FilePicker = ({ onFileSelect, selectedFile, ingestedFiles, isIngesting }) 
                 ))
               ) : (
                 <div className="p-4 text-center text-gray-500 text-sm">
-                  No files found
+                  {searchQuery ? 'No files match that search' : 'No files yet — upload one first'}
                 </div>
               )}
             </div>

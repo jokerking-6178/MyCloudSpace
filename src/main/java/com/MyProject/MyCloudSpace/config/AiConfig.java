@@ -9,14 +9,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AiConfig {
 
-    @Value("${rag.chunk-size:1000}")
+    @Value("${rag.chunk-size:800}")
     private int chunkSize;
 
-    @Value("${rag.chunk-overlap:200}")
-    private int chunkOverlap;
+    @Value("${rag.min-chunk-size-chars:350}")
+    private int minChunkSizeChars;
 
-    @Value("${spring.ai.vectorstore.pgvector.dimensions:768}")
-    private int dimensions;
+    @Value("${rag.min-chunk-length-to-embed:5}")
+    private int minChunkLengthToEmbed;
+
+    @Value("${rag.max-chunks:10000}")
+    private int maxChunks;
 
     @Bean
     public ChatClient chatClient(ChatClient.Builder builder) {
@@ -25,6 +28,6 @@ public class AiConfig {
 
     @Bean
     public TokenTextSplitter tokenTextSplitter() {
-        return new TokenTextSplitter(chunkSize, chunkOverlap, 5, 10000, true);
+        return new TokenTextSplitter(chunkSize, minChunkSizeChars, minChunkLengthToEmbed, maxChunks, true);
     }
 }

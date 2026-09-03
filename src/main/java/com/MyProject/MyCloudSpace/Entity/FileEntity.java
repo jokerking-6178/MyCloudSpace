@@ -2,17 +2,18 @@ package com.MyProject.MyCloudSpace.Entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "files")
+@Table(name = "files", indexes = {
+        @Index(name = "idx_files_uploaded_by", columnList = "uploaded_by_user_id")
+})
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@ToString(exclude = {"uploadedBy", "sharedWith"}) // Exclude bidirectional relationships
+@ToString(exclude = {"uploadedBy", "sharedWith"})
 @EqualsAndHashCode(exclude = {"uploadedBy", "sharedWith"})
 public class FileEntity {
 
@@ -46,7 +47,7 @@ public class FileEntity {
     private String tags;
 
     @Column(nullable = false)
-    private Boolean isPublic = true;
+    private Boolean isPublic = false;
 
     @ManyToMany(mappedBy = "sharedFiles")
     private List<UserEntity> sharedWith = new ArrayList<>();
