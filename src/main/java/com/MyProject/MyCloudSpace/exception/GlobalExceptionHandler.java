@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -61,6 +62,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
     public ResponseEntity<ApiError> handleNotFound(Exception ex, HttpServletRequest request) {
         return build(HttpStatus.NOT_FOUND, "No such endpoint.", request, null);
+    }
+
+    // Raised by Spring AI's RestClient when Ollama cannot be reached.
+    @ExceptionHandler(ResourceAccessException.class)
+    public ResponseEntity<ApiError> handleUpstreamUnavailable(ResourceAccessException ex, HttpServletRequest request) {
+        log.warn("Upstream service unreachable on {} {}: {}", request.getMethod(), request.getRequestURI(),
+                ex.getMessage());
+        return build(HttpStatus.SERVICE_UNAVAILABLE,
+                "The AI service is not available right now. Please try again shortly.", request, null);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

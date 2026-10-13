@@ -2,6 +2,7 @@ package com.MyProject.MyCloudSpace.service.impl;
 
 import com.MyProject.MyCloudSpace.Entity.FileEntity;
 import com.MyProject.MyCloudSpace.exception.AccessDeniedApiException;
+import com.MyProject.MyCloudSpace.exception.BadRequestException;
 import com.MyProject.MyCloudSpace.exception.ResourceNotFoundException;
 import com.MyProject.MyCloudSpace.io.RagChatRequest;
 import com.MyProject.MyCloudSpace.io.RagChatResponse;
@@ -21,6 +22,7 @@ import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,9 +46,16 @@ public class RagServiceImpl implements RagService {
     private final ChatClient chatClient;
     private final TokenTextSplitter tokenTextSplitter;
     private final ConversationStore conversationStore;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${rag.similarity-threshold:0.5}")
     private double similarityThreshold;
+
+    @Value("${spring.ai.vectorstore.pgvector.schema-name:public}")
+    private String vectorSchema;
+
+    @Value("${spring.ai.vectorstore.pgvector.table-name:vector_store}")
+    private String vectorTable;
 
     @Override
     public RagIngestionResponse ingestFile(Long fileId, String userId) {
@@ -80,6 +89,12 @@ public class RagServiceImpl implements RagService {
         }).toList();
 
         List<Document> chunks = tokenTextSplitter.apply(taggedDocs);
+
+        // Images and scanned PDFs have no text layer; storing nothing would look like success.
+        if (chunks.isEmpty()) {
+            throw new BadRequestException(
+                    "No readable text was found in this file. Images and scanned PDFs are not supported.");
+        }
 
         deleteFileVectors(fileId);
         vectorStore.add(chunks);
@@ -171,26 +186,17 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public List<Long> getIngestedFileIds(String userId) {
-        FilterExpressionBuilder b = new FilterExpressionBuilder();
-
-        List<Document> docs = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query("*")
-                        .topK(500)
-                        .similarityThreshold(0.0d)
-                        .filterExpression(b.eq(META_USER_ID, userId).build())
-                        .build());
-
-        if (docs == null) {
-            return List.of();
-        }
+        // Read metadata directly: a similarity search would need an embedding call (and Ollama)
+        // just to list IDs, and would silently cap the result at topK chunks.
+        String sql = "SELECT DISTINCT metadata->>'" + META_FILE_ID + "' FROM "
+                + vectorSchema + "." + vectorTable
+                + " WHERE metadata->>'" + META_USER_ID + "' = ?";
 
         Set<Long> ids = new LinkedHashSet<>();
-        for (Document doc : docs) {
-            Object raw = doc.getMetadata().get(META_FILE_ID);
+        for (String raw : jdbcTemplate.queryForList(sql, String.class, userId)) {
             if (raw != null) {
                 try {
-                    ids.add(Long.parseLong(String.valueOf(raw)));
+                    ids.add(Long.parseLong(raw));
                 } catch (NumberFormatException ignored) {
                 }
             }
